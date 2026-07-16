@@ -1,171 +1,1788 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CSV Waveform Viewer</title>
-  <style>
-    :root { --blue:#0768b5; --blue-dark:#034d89; --ink:#162b3c; --muted:#617384; --line:#d7e4ee; --surface:#ffffff; --soft:#f5f9fc; }
-    * { box-sizing:border-box; }
-    body { margin:0; background:var(--soft); color:var(--ink); font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    main { width:min(1100px,calc(100% - 32px)); margin:0 auto; padding:36px 0 48px; }
-    header { border-bottom:3px solid var(--blue); padding:0 0 18px; margin-bottom:18px; }
-    h1 { margin:0; color:var(--blue-dark); font-size:clamp(1.5rem,3vw,2.1rem); font-weight:700; letter-spacing:0; }
-    header p { margin:8px 0 0; color:var(--muted); }
-    .panel { background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:18px; box-shadow:0 8px 24px rgb(7 104 181 / 0.06); }
-    .controls { display:grid; grid-template-columns:1.5fr repeat(3,minmax(150px,1fr)); gap:12px; align-items:end; }
-    label { display:grid; gap:6px; color:var(--muted); font-size:.86rem; font-weight:650; }
-    input, select { width:100%; min-height:38px; border:1px solid #b9cddd; border-radius:5px; background:#fff; color:var(--ink); font:inherit; padding:6px 8px; }
-    input[type="file"] { padding:5px; }
-    .status { margin:14px 0 0; color:var(--muted); font-size:.9rem; }
-    .status.error { color:#b4233f; }
-    .chart-panel { margin-top:16px; }
-    .chart-head { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; align-items:baseline; margin-bottom:10px; }
-    h2 { margin:0; color:var(--blue-dark); font-size:1rem; }
-    #chart-summary { color:var(--muted); font-size:.86rem; }
-    canvas { display:block; width:100%; height:auto; aspect-ratio:16 / 7; min-height:250px; border:1px solid var(--line); border-radius:5px; background:#fff; }
-    .notes { margin:16px 0 0; color:var(--muted); font-size:.85rem; line-height:1.6; }
-    code { color:var(--blue-dark); }
-    @media (max-width:760px) { main { width:min(100% - 24px,1100px); padding-top:24px; } .controls { grid-template-columns:1fr; } canvas { aspect-ratio:4 / 3; } }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multichannel Slow-Wave Dashboard</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f6f9fd;
+    --panel: #ffffff;
+    --panel-soft: #f8fbff;
+    --text: #1c2633;
+    --muted: #627083;
+    --border: #d8e3f1;
+    --border-strong: #b7cbe4;
+    --accent: #0f65b7;
+    --accent-strong: #004f9f;
+    --accent-soft: #eaf4ff;
+    --low: #0f65b7;
+    --mid: #f7f7f7;
+    --high: #c2455a;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    padding: 18px;
+    background:
+      linear-gradient(180deg, #ffffff 0, var(--bg) 220px),
+      var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  main {
+    display: grid;
+    gap: 12px;
+    max-width: 1420px;
+    margin: 0 auto;
+  }
+
+  .app-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: end;
+    padding: 6px 2px 8px;
+    border-bottom: 2px solid var(--accent);
+  }
+
+  .app-header h1 {
+    margin: 0;
+    color: var(--accent-strong);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .app-header p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .app-kicker {
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .toolbar {
+    display: grid;
+    grid-template-columns: minmax(170px, 1fr) minmax(180px, 1.5fr) minmax(130px, .8fr) minmax(130px, .8fr) minmax(110px, .6fr) minmax(120px, .65fr) auto;
+    gap: 10px;
+    align-items: end;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 10px 28px rgb(15 101 183 / 0.07);
+  }
+
+  .metric-toolbar {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(190px, 1fr) minmax(190px, 1fr);
+    gap: 10px;
+    align-items: end;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 10px 28px rgb(15 101 183 / 0.07);
+  }
+
+  label {
+    display: grid;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  input,
+  select,
+  button {
+    min-height: 34px;
+    width: 100%;
+    color: var(--text);
+    font: inherit;
+  }
+
+  input[type="file"],
+  select {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel-soft);
+    padding: 5px 7px;
+  }
+
+  input[type="range"] {
+    accent-color: var(--accent);
+  }
+
+  button {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: linear-gradient(180deg, var(--accent) 0, var(--accent-strong) 100%);
+    color: #ffffff;
+    cursor: pointer;
+    font-weight: 600;
+    box-shadow: 0 6px 16px rgb(15 101 183 / 0.18);
+  }
+
+  .value {
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .dashboard {
+    display: grid;
+    grid-template-columns: minmax(360px, 1.25fr) minmax(300px, .85fr);
+    gap: 12px;
+    align-items: start;
+  }
+
+  .panel {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 8px 24px rgb(22 63 110 / 0.06);
+  }
+
+  .panel h2 {
+    margin: 0 0 8px;
+    color: var(--accent-strong);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    min-height: 250px;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: linear-gradient(180deg, #fbfdff 0, #f3f8ff 100%);
+  }
+
+  .side {
+    display: grid;
+    gap: 12px;
+  }
+
+  .metrics-dashboard {
+    display: grid;
+    grid-template-columns: minmax(340px, .85fr) minmax(420px, 1.15fr);
+    gap: 12px;
+    align-items: start;
+  }
+
+  .metric-side {
+    display: grid;
+    gap: 12px;
+  }
+
+  #metric-map-canvas {
+    aspect-ratio: 1 / 1;
+  }
+
+  #heatmap-canvas,
+  #metric-map-canvas {
+    cursor: pointer;
+  }
+
+  .metric-details {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
+    gap: 8px;
+  }
+
+  .metric-card {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--panel-soft);
+    padding: 8px;
+  }
+
+  .metric-card span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .metric-card strong {
+    display: block;
+    margin-top: 4px;
+    color: var(--accent-strong);
+    font-size: 15px;
+    font-weight: 650;
+  }
+
+  .metric-description {
+    margin: -2px 0 8px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    padding: 2px 4px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .status strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  @media (max-width: 920px) {
+    .toolbar,
+    .metric-toolbar,
+    .dashboard,
+    .metrics-dashboard,
+    .metric-details {
+      grid-template-columns: 1fr;
+    }
+
+    .app-header {
+      display: block;
+    }
+  }
+</style>
 </head>
 <body>
-  <main>
-    <header>
-      <h1>CSV Waveform Viewer</h1>
-      <p>View time-series signals directly in your browser.</p>
-    </header>
+<main>
+  <header class="app-header">
+    <div>
+      <div class="app-kicker">Slow-wave analysis</div>
+      <h1>Multichannel Potential Dashboard</h1>
+      <p>64-channel amplitude, frequency, and propagation overview</p>
+    </div>
+  </header>
 
-    <section class="panel" aria-label="CSV controls">
-      <div class="controls">
-        <label>CSV file
-          <input id="file-input" type="file" accept=".csv,text/csv">
-        </label>
-        <label>Time column
-          <select id="time-column" disabled></select>
-        </label>
-        <label>Signal column
-          <select id="signal-column" disabled></select>
-        </label>
-        <label>Signal unit
-          <input id="unit-input" value="mV" disabled>
-        </label>
-      </div>
-      <p id="status" class="status">Choose a CSV file to begin.</p>
-    </section>
+  <section class="toolbar" aria-label="Controls">
+    <label>
+      <span id="label-csv">CSV</span>
+      <input id="file-input" type="file" accept=".csv,text/csv">
+    </label>
+    <label>
+      <span><span id="label-time">Time</span> <span id="time-label" class="value"></span></span>
+      <input id="time-input" type="range" min="0" max="0" value="0">
+    </label>
+    <label>
+      <span id="label-channel">Channel</span>
+      <select id="channel-select"></select>
+    </label>
+    <label>
+      <span><span id="label-height">Height</span> <span id="height-label" class="value"></span></span>
+      <input id="height-input" type="range" min="35" max="180" value="95">
+    </label>
+    <label>
+      <span id="label-speed">Speed</span>
+      <select id="speed-input">
+        <option value="0.25">0.25x</option>
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="2">2x</option>
+        <option value="4">4x</option>
+      </select>
+    </label>
+    <label>
+      <span id="label-transform">Transform</span>
+      <select id="transform-input">
+        <option value="waveform" selected>Waveform</option>
+        <option value="integral">Integral</option>
+        <option value="fft-band">FFT band</option>
+      </select>
+    </label>
+    <label>
+      <span id="label-language">Language</span>
+      <select id="language-select">
+        <option value="ja">日本語</option>
+        <option value="en">English</option>
+      </select>
+    </label>
+    <button id="play-button" type="button">Play</button>
+  </section>
 
-    <section class="panel chart-panel" aria-labelledby="waveform-title">
-      <div class="chart-head">
-        <h2 id="waveform-title">Waveform</h2>
-        <span id="chart-summary">No data loaded</span>
-      </div>
-      <canvas id="chart" width="1200" height="525" role="img" aria-label="Selected waveform chart"></canvas>
-      <p class="notes">Expected format: a header row, one time column, and one or more numeric signal columns. The first column is selected as time by default. Files are processed locally in this browser and are not uploaded.</p>
-    </section>
-  </main>
+  <section class="dashboard">
+    <article class="panel">
+      <h2 id="title-surface">3D surface</h2>
+      <canvas id="surface-canvas"></canvas>
+    </article>
+    <div class="side">
+      <article class="panel">
+        <h2 id="title-heatmap">2D heatmap</h2>
+        <canvas id="heatmap-canvas"></canvas>
+      </article>
+      <article class="panel">
+        <h2 id="title-trace">Selected channel trace</h2>
+        <canvas id="trace-canvas"></canvas>
+      </article>
+      <article class="panel">
+        <h2 id="title-profile">Frame channel profile</h2>
+        <canvas id="profile-canvas"></canvas>
+      </article>
+    </div>
+  </section>
 
-  <script>
-    const state = { headers: [], rows: [] };
-    const fileInput = document.getElementById('file-input');
-    const timeSelect = document.getElementById('time-column');
-    const signalSelect = document.getElementById('signal-column');
-    const unitInput = document.getElementById('unit-input');
-    const status = document.getElementById('status');
-    const summary = document.getElementById('chart-summary');
-    const canvas = document.getElementById('chart');
-    const ctx = canvas.getContext('2d');
+  <section class="status" aria-label="Status">
+    <span><span id="status-source">source</span> <strong id="source-label">Demo</strong></span>
+    <span><span id="status-frames">frames</span> <strong id="frames-label">0</strong></span>
+    <span><span id="status-channels">channels</span> <strong id="channels-label">0</strong></span>
+    <span><span id="status-min">min</span> <strong id="min-label"></strong></span>
+    <span><span id="status-max">max</span> <strong id="max-label"></strong></span>
+  </section>
 
-    function parseCsv(text) {
-      const rows = [];
-      let row = [], cell = '', quoted = false;
-      for (let i = 0; i < text.length; i += 1) {
-        const char = text[i];
-        if (quoted && char === '"' && text[i + 1] === '"') { cell += '"'; i += 1; }
-        else if (char === '"') quoted = !quoted;
-        else if (!quoted && char === ',') { row.push(cell.trim()); cell = ''; }
-        else if (!quoted && (char === '\n' || char === '\r')) {
-          if (char === '\r' && text[i + 1] === '\n') i += 1;
-          row.push(cell.trim());
-          if (row.some(value => value !== '')) rows.push(row);
-          row = []; cell = '';
-        } else cell += char;
+  <section class="metric-toolbar" aria-label="Slow-wave metric controls">
+    <label>
+      <span id="label-summary">Summary CSV</span>
+      <input id="summary-input" type="file" accept=".csv,text/csv">
+    </label>
+    <label>
+      <span id="label-metric">Metric</span>
+      <select id="metric-select"></select>
+    </label>
+    <label>
+      <span id="label-metric-channel">Metric channel</span>
+      <select id="metric-channel-select"></select>
+    </label>
+  </section>
+
+  <section class="metrics-dashboard">
+    <article class="panel">
+      <h2 id="title-metric-map">Slow-wave metric map</h2>
+      <p id="metric-description" class="metric-description"></p>
+      <canvas id="metric-map-canvas"></canvas>
+    </article>
+    <div class="metric-side">
+      <article class="panel">
+        <h2 id="title-scatter">FFT frequency vs peak-interval frequency</h2>
+        <canvas id="metric-scatter-canvas"></canvas>
+      </article>
+      <article class="panel">
+        <h2 id="title-metric-profile">Selected metric profile</h2>
+        <canvas id="metric-profile-canvas"></canvas>
+      </article>
+      <article class="panel">
+        <h2 id="title-metric-detail">Selected metric channel</h2>
+        <div id="metric-details" class="metric-details"></div>
+      </article>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const fileInput = document.getElementById("file-input");
+  const timeInput = document.getElementById("time-input");
+  const channelSelect = document.getElementById("channel-select");
+  const heightInput = document.getElementById("height-input");
+  const speedInput = document.getElementById("speed-input");
+  const transformInput = document.getElementById("transform-input");
+  const languageSelect = document.getElementById("language-select");
+  const playButton = document.getElementById("play-button");
+  const timeLabel = document.getElementById("time-label");
+  const heightLabel = document.getElementById("height-label");
+  const sourceLabel = document.getElementById("source-label");
+  const framesLabel = document.getElementById("frames-label");
+  const channelsLabel = document.getElementById("channels-label");
+  const minLabel = document.getElementById("min-label");
+  const maxLabel = document.getElementById("max-label");
+  const summaryInput = document.getElementById("summary-input");
+  const metricSelect = document.getElementById("metric-select");
+  const metricChannelSelect = document.getElementById("metric-channel-select");
+  const metricDetails = document.getElementById("metric-details");
+  const metricDescription = document.getElementById("metric-description");
+  const canvases = {
+    surface: document.getElementById("surface-canvas"),
+    heatmap: document.getElementById("heatmap-canvas"),
+    trace: document.getElementById("trace-canvas"),
+    profile: document.getElementById("profile-canvas"),
+    metricMap: document.getElementById("metric-map-canvas"),
+    metricScatter: document.getElementById("metric-scatter-canvas"),
+    metricProfile: document.getElementById("metric-profile-canvas")
+  };
+
+  const preferredMetrics = [
+    "amplitude_peak_to_peak",
+    "dominant_frequency_hz",
+    "peak_interval_frequency_hz",
+    "n_peaks",
+    "interval_mean",
+    "peaks_per_min",
+    "dominant_period_s",
+    "dominant_linear_amplitude",
+    "band_linear_amplitude_sum",
+    "absolute_auc_adc_count_s",
+    "positive_auc_adc_count_s",
+    "negative_auc_adc_count_s",
+    "signal_rms_adc_count",
+    "net_auc_balance",
+    "dominant_power",
+    "spectral_centroid_hz",
+    "peak_top_mean",
+    "signal_peak_to_peak"
+  ];
+
+  const labels = {
+    en: {
+      csv: "Signal CSV",
+      time: "Time",
+      channel: "Channel",
+      height: "Height",
+      speed: "Speed",
+      transform: "Transform",
+      language: "Language",
+      play: "Play",
+      pause: "Pause",
+      surface: "3D surface",
+      heatmap: "2D heatmap",
+      trace: "Time trace of selected channel",
+      profile: "Spatial profile at current time",
+      source: "source",
+      frames: "frames",
+      channels: "channels",
+      min: "min",
+      max: "max",
+      potentialUnit: "mV",
+      summary: "Analysis summary CSV",
+      metric: "Metric",
+      metricChannel: "Metric channel",
+      metricMap: "Channel metric map",
+      scatter: "Frequency agreement plot",
+      metricProfile: "Selected metric profile",
+      metricDetail: "Selected channel metrics",
+      drag: "drag to rotate",
+      scatterX: "x: FFT dominant frequency",
+    noValue: "n/a"
+    },
+    ja: {
+      csv: "電位CSV",
+      time: "時刻",
+      channel: "チャンネル",
+      height: "高さ",
+      speed: "速度",
+      transform: "変換",
+      language: "言語",
+      play: "再生",
+      pause: "停止",
+      surface: "3D電位面",
+      heatmap: "2D電位マップ",
+      trace: "選択チャンネルの時間波形",
+      profile: "現在時刻の空間プロファイル",
+      source: "データ",
+      frames: "時点数",
+      channels: "チャンネル数",
+      min: "最小",
+      max: "最大",
+      potentialUnit: "mV",
+      summary: "解析summary CSV（任意）",
+      metric: "指標",
+      metricChannel: "指標チャンネル",
+      metricMap: "チャンネル別指標マップ",
+      scatter: "周波数一致プロット",
+      metricProfile: "選択指標のチャンネルプロファイル",
+      metricDetail: "選択チャンネルの指標",
+      drag: "ドラッグで回転",
+      scatterX: "x: FFT主要周波数",
+      noValue: "なし"
+    }
+  };
+
+  const metricUnits = {
+    amplitude_peak_to_peak: "signal unit",
+    n_peaks: "count",
+    peak_top_mean: "signal unit",
+    interval_mean: "s",
+    peak_interval_frequency_hz: "Hz",
+    peaks_per_min: "peaks/min",
+    dominant_frequency_hz: "Hz",
+    dominant_period_s: "s",
+    dominant_linear_amplitude: "ADC count",
+    band_linear_amplitude_sum: "ADC count",
+    absolute_auc_adc_count_s: "ADC count*s",
+    positive_auc_adc_count_s: "ADC count*s",
+    negative_auc_adc_count_s: "ADC count*s",
+    signed_auc_adc_count_s: "ADC count*s",
+    signal_rms_adc_count: "ADC count",
+    net_auc_balance: "ratio",
+    dominant_power: "signal unit^2",
+    spectral_centroid_hz: "Hz",
+    signal_peak_to_peak: "signal unit"
+  };
+
+  const metricText = {
+    amplitude_peak_to_peak: {
+      en: ["Amplitude", "Peak-to-peak amplitude calculated as maximum minus minimum signal value in each channel."],
+      ja: ["振幅", "各チャンネルの最大値と最小値の差として計算したpeak-to-peak振幅。"]
+    },
+    n_peaks: {
+      en: ["Peak count", "Number of detected downward peak tops in each channel."],
+      ja: ["Peak数", "各チャンネルで検出された下向きPeak topの数。"]
+    },
+    peak_top_mean: {
+      en: ["Mean peak depth", "Mean value of detected peak tops; more negative means deeper downward peaks."],
+      ja: ["平均Peak深さ", "検出されたPeak top値の平均。より負の値ほど下向きピークが深い。"]
+    },
+    interval_mean: {
+      en: ["Mean interval", "Mean time interval between consecutive detected peak tops."],
+      ja: ["平均Peak間隔", "連続するPeak top間の平均時間。"]
+    },
+    peak_interval_frequency_hz: {
+      en: ["Peak-based frequency", "Frequency estimated as 1 / mean peak interval."],
+      ja: ["Peak間隔由来周波数", "平均Peak間隔の逆数として推定した周波数。"]
+    },
+    peaks_per_min: {
+      en: ["Peaks per minute", "Peak occurrence rate converted to events per minute."],
+      ja: ["1分あたりPeak数", "Peak発生頻度を1分あたりの回数に換算した値。"]
+    },
+    dominant_frequency_hz: {
+      en: ["FFT dominant frequency", "Frequency component with the largest FFT power in the selected band."],
+      ja: ["FFT主要周波数", "指定周波数帯でFFTパワーが最大となる周期成分。"]
+    },
+    dominant_period_s: {
+      en: ["FFT dominant period", "Period corresponding to the FFT dominant frequency."],
+      ja: ["FFT主要周期", "FFT主要周波数に対応する周期。"]
+    },
+    dominant_power: {
+      en: ["FFT dominant power", "Power of the dominant frequency component."],
+      ja: ["FFT主要パワー", "主要周波数成分のパワー。"]
+    },
+    spectral_centroid_hz: {
+      en: ["Spectral centroid", "Power-weighted center of the spectrum; higher values indicate more high-frequency content."],
+      ja: ["スペクトル重心", "パワーで重み付けした周波数の中心。高いほど高周波成分寄り。"]
+    },
+    signal_peak_to_peak: {
+      en: ["Signal amplitude", "Compatibility alias for amplitude; maximum minus minimum signal value."],
+      ja: ["信号振幅", "振幅の互換表示。最大値と最小値の差。"]
+    },
+    dominant_linear_amplitude: {
+      en: ["FFT linear amplitude", "Largest one-sided Hann-windowed linear amplitude in the slow-wave band."],
+      ja: ["FFT線形振幅", "slow-wave帯域で最大となるHann窓one-sided線形振幅。"]
+    },
+    band_linear_amplitude_sum: {
+      en: ["FFT band amplitude sum", "Sum of one-sided linear amplitudes in the slow-wave band."],
+      ja: ["FFT帯域振幅和", "slow-wave帯域に含まれるone-sided線形振幅の総和。"]
+    },
+    absolute_auc_adc_count_s: {
+      en: ["Absolute integral", "Time integral of the absolute detrended signal."],
+      ja: ["絶対値積分", "平均を引いた信号の絶対値を時間積分した値。"]
+    },
+    signal_rms_adc_count: {
+      en: ["RMS", "Root mean square of the detrended signal."],
+      ja: ["RMS", "平均を引いた信号の二乗平均平方根。"]
+    }
+  };
+
+  const state = {
+    times: [],
+    frames: [],
+    baseTimes: [],
+    baseFrames: [],
+    channels: [],
+    source: "Demo",
+    transform: "waveform",
+    unit: "mV",
+    frame: 0,
+    channel: 0,
+    min: -1,
+    max: 1,
+    height: Number(heightInput.value),
+    speed: Number(speedInput.value),
+    yaw: -0.72,
+    pitch: 0.76,
+    playing: false,
+    playbackStartMs: 0,
+    playbackStartFrame: 0,
+    drag: null
+  };
+
+  const metricState = {
+    rows: [],
+    metrics: [],
+    selectedMetric: "amplitude_peak_to_peak",
+    selectedIndex: 0,
+    source: "Demo summary"
+  };
+
+  const voltsToMillivolts = 1000;
+  const autoPeakThreshold = -4.4;
+  const fftMinFrequency = 0.25;
+  const fftMaxFrequency = 10.5;
+  const fftLength = 16384;
+
+  function lang() {
+    return languageSelect.value || "ja";
+  }
+
+  function t(key) {
+    return labels[lang()][key] || labels.en[key] || key;
+  }
+
+  function metricLabel(metric) {
+    const label = metricText[metric]?.[lang()]?.[0] || metric;
+    const unit = metricUnits[metric];
+    return unit ? `${label} (${unit})` : label;
+  }
+
+  function metricHelp(metric) {
+    const help = metricText[metric]?.[lang()]?.[1] || "";
+    const unit = metricUnits[metric];
+    if (!unit) return help;
+    return lang() === "ja" ? `${help} 単位: ${unit}` : `${help} Unit: ${unit}`;
+  }
+
+  function finiteMetricValue(value) {
+    if (value === "" || value === null || value === undefined) return NaN;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : NaN;
+  }
+
+  function minMaxNested(frames) {
+    let min = Infinity;
+    let max = -Infinity;
+    let maxAbs = 0;
+    for (const frame of frames) {
+      for (const value of frame) {
+        if (!Number.isFinite(value)) continue;
+        if (value < min) min = value;
+        if (value > max) max = value;
+        const abs = Math.abs(value);
+        if (abs > maxAbs) maxAbs = abs;
       }
-      row.push(cell.trim());
-      if (row.some(value => value !== '')) rows.push(row);
-      return rows;
     }
+    return Number.isFinite(min) ? { min, max, maxAbs } : { min: -1, max: 1, maxAbs: 0 };
+  }
 
-    function setOptions(select, headers, selected) {
-      select.replaceChildren(...headers.map((header, index) => {
-        const option = document.createElement('option');
-        option.value = index;
-        option.textContent = header || `Column ${index + 1}`;
-        option.selected = index === selected;
-        return option;
-      }));
-    }
+  function signalUnit() {
+    if (state.transform === "integral") return `${state.unit}*s`;
+    if (state.transform === "fft-band") return "linear amplitude sum";
+    return state.unit;
+  }
 
-    function resizeCanvas() {
-      const ratio = window.devicePixelRatio || 1;
-      const bounds = canvas.getBoundingClientRect();
-      canvas.width = Math.round(bounds.width * ratio);
-      canvas.height = Math.round(bounds.height * ratio);
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      return { width: bounds.width, height: bounds.height };
-    }
+  function resetPlaybackClock() {
+    state.playbackStartMs = performance.now();
+    state.playbackStartFrame = state.frame;
+  }
 
-    function drawChart() {
-      const { width, height } = resizeCanvas();
-      ctx.clearRect(0, 0, width, height);
-      if (!state.rows.length) return;
-      const timeIndex = Number(timeSelect.value);
-      const signalIndex = Number(signalSelect.value);
-      const data = state.rows.map(row => ({ x: Number(row[timeIndex]), y: Number(row[signalIndex]) }))
-        .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
-      if (data.length < 2) { showStatus('Select columns containing at least two numeric rows.', true); return; }
-
-      const xValues = data.map(point => point.x), yValues = data.map(point => point.y);
-      const xMin = Math.min(...xValues), xMax = Math.max(...xValues);
-      let yMin = Math.min(...yValues), yMax = Math.max(...yValues);
-      const yPad = (yMax - yMin || 1) * 0.1; yMin -= yPad; yMax += yPad;
-      const pad = { left: 72, right: 22, top: 24, bottom: 52 };
-      const plotW = Math.max(1, width - pad.left - pad.right), plotH = Math.max(1, height - pad.top - pad.bottom);
-      const scaleX = value => pad.left + ((value - xMin) / (xMax - xMin || 1)) * plotW;
-      const scaleY = value => pad.top + (1 - (value - yMin) / (yMax - yMin || 1)) * plotH;
-
-      ctx.font = '12px system-ui'; ctx.fillStyle = '#617384'; ctx.strokeStyle = '#d7e4ee'; ctx.lineWidth = 1;
-      for (let i = 0; i <= 4; i += 1) {
-        const y = pad.top + (plotH * i / 4); const value = yMax - ((yMax - yMin) * i / 4);
-        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(width - pad.right, y); ctx.stroke();
-        ctx.textAlign = 'right'; ctx.fillText(value.toPrecision(4), pad.left - 8, y + 4);
+  function makeDemo() {
+    const times = [];
+    const frames = [];
+    const channels = Array.from({ length: 64 }, (_, i) => `ch${i + 1}`);
+    for (let i = 0; i < 150; i += 1) {
+      times.push(i * 0.05);
+      const frame = [];
+      for (let y = 0; y < 8; y += 1) {
+        for (let x = 0; x < 8; x += 1) {
+          const cx = 3.5 + Math.sin(i * 0.052) * 1.2;
+          const cy = 3.5 + Math.cos(i * 0.047) * 1.0;
+          const d = Math.hypot(x - cx, y - cy);
+          const slow = -6 * Math.exp(-(d * d) / 5.1) * Math.sin(i * 0.12 - d * 0.65);
+          const ripple = 1.1 * Math.sin(i * 0.18 + x * 0.75 - y * 0.38);
+          frame.push(slow + ripple);
+        }
       }
-      ctx.strokeStyle = '#8fa8bb'; ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, height - pad.bottom); ctx.lineTo(width - pad.right, height - pad.bottom); ctx.stroke();
-      ctx.fillStyle = '#617384'; ctx.textAlign = 'left'; ctx.fillText(String(xMin.toPrecision(4)), pad.left, height - 24);
-      ctx.textAlign = 'right'; ctx.fillText(String(xMax.toPrecision(4)), width - pad.right, height - 24);
-      ctx.textAlign = 'center'; ctx.fillText(state.headers[timeIndex], pad.left + plotW / 2, height - 7);
-      ctx.save(); ctx.translate(16, pad.top + plotH / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(`${state.headers[signalIndex]} (${unitInput.value || 'a.u.'})`, 0, 0); ctx.restore();
-      ctx.strokeStyle = '#0768b5'; ctx.lineWidth = 2; ctx.beginPath();
-      data.forEach((point, index) => { const x = scaleX(point.x), y = scaleY(point.y); if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
-      ctx.stroke();
-      summary.textContent = `${state.headers[signalIndex]} | ${data.length.toLocaleString()} samples | ${unitInput.value || 'a.u.'}`;
-      showStatus(`${fileInput.files[0].name}: ${state.rows.length.toLocaleString()} rows, ${state.headers.length} columns.`);
+      frames.push(frame);
     }
+    setData({ times, frames, channels, source: "Demo" });
+    setMetricRows(makeDemoMetricRows(), "Demo summary");
+  }
 
-    function showStatus(message, isError = false) { status.textContent = message; status.classList.toggle('error', isError); }
+  function makeDemoMetricRows() {
+    const rows = [];
+    for (let i = 0; i < 64; i += 1) {
+      const x = i % 8;
+      const y = Math.floor(i / 8);
+      const d = Math.hypot(x - 3.5, y - 3.5);
+      const freq = 0.36 + 0.32 * Math.exp(-(d * d) / 10) + 0.04 * Math.sin(i * 0.7);
+      const nPeaks = Math.max(0, Math.round(freq * 12 + Math.sin(i) * 2 - 2));
+      const interval = nPeaks > 1 ? 1 / freq : NaN;
+      rows.push({
+        channel: `ch${i + 1}`,
+        channel_index_0based: i,
+        channel_number: i + 1,
+        n_peaks: nPeaks,
+        amplitude_peak_to_peak: 3 + 6 * Math.exp(-(d * d) / 8),
+        peak_top_mean: -2 - 4 * Math.exp(-(d * d) / 8),
+        interval_mean: interval,
+        peak_interval_frequency_hz: Number.isFinite(interval) ? 1 / interval : NaN,
+        peaks_per_min: Number.isFinite(interval) ? 60 / interval : NaN,
+        dominant_frequency_hz: freq,
+        dominant_period_s: 1 / freq,
+        dominant_power: 10 + 80 * Math.exp(-(d * d) / 8),
+        spectral_centroid_hz: freq + 0.05,
+        signal_peak_to_peak: 3 + 6 * Math.exp(-(d * d) / 8)
+      });
+    }
+    return rows;
+  }
 
-    fileInput.addEventListener('change', async () => {
-      const file = fileInput.files[0];
-      if (!file) return;
-      const parsed = parseCsv(await file.text());
-      if (parsed.length < 3 || parsed[0].length < 2) { state.rows = []; showStatus('CSV needs a header row and at least two data rows with two columns.', true); drawChart(); return; }
-      state.headers = parsed[0]; state.rows = parsed.slice(1);
-      setOptions(timeSelect, state.headers, 0); setOptions(signalSelect, state.headers, 1);
-      timeSelect.disabled = false; signalSelect.disabled = false; unitInput.disabled = false;
-      drawChart();
+  function parseCsv(text) {
+    const rows = [];
+    let row = [];
+    let cell = "";
+    let quoted = false;
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      const next = text[i + 1];
+      if (quoted) {
+        if (ch === '"' && next === '"') {
+          cell += '"';
+          i += 1;
+        } else if (ch === '"') {
+          quoted = false;
+        } else {
+          cell += ch;
+        }
+      } else if (ch === '"') {
+        quoted = true;
+      } else if (ch === ",") {
+        row.push(cell);
+        cell = "";
+      } else if (ch === "\n") {
+        row.push(cell);
+        rows.push(row);
+        row = [];
+        cell = "";
+      } else if (ch !== "\r") {
+        cell += ch;
+      }
+    }
+    row.push(cell);
+    rows.push(row);
+    return rows.filter((r) => r.some((v) => v.trim() !== ""));
+  }
+
+  function loadCsv(text, name) {
+    const rows = parseCsv(text);
+    if (rows.length < 2) return;
+    const header = rows[0].map((v) => v.trim());
+    const channels = header.slice(1, 65).map((v, i) => v || `ch${i + 1}`);
+    const times = [];
+    const rawFrames = [];
+    for (const row of rows.slice(1)) {
+      const values = row.slice(1, 65).map((value) => Number(value));
+      if (values.length < 64 || values.some((v) => !Number.isFinite(v))) continue;
+      const t = Number(row[0]);
+      times.push(Number.isFinite(t) ? t : rawFrames.length);
+      rawFrames.push(values);
+    }
+    if (!rawFrames.length) return;
+    const rawRange = minMaxNested(rawFrames);
+    const looksLikeVolts = rawRange.maxAbs > 0 && rawRange.maxAbs < 0.1;
+    const frames = looksLikeVolts
+      ? rawFrames.map((frame) => frame.map((value) => value * voltsToMillivolts))
+      : rawFrames;
+    setData({
+      times,
+      frames,
+      channels,
+      source: name || "CSV",
+      unit: looksLikeVolts ? "mV" : "ADC count"
     });
-    [timeSelect, signalSelect].forEach(element => element.addEventListener('change', drawChart));
-    unitInput.addEventListener('input', drawChart);
-    window.addEventListener('resize', drawChart);
-  </script>
+  }
+
+  function loadSummaryCsv(text, name) {
+    const csvRows = parseCsv(text);
+    if (csvRows.length < 2) return;
+    const header = csvRows[0].map((v) => v.trim());
+    const rows = csvRows.slice(1).map((values, rowIndex) => {
+      const row = {};
+      header.forEach((key, i) => {
+        const raw = values[i] ?? "";
+        const numeric = Number(raw);
+        row[key] = raw !== "" && Number.isFinite(numeric) ? numeric : raw;
+      });
+      if (!Number.isFinite(Number(row.channel_index_0based))) row.channel_index_0based = rowIndex;
+      if (!Number.isFinite(Number(row.channel_number))) row.channel_number = rowIndex + 1;
+      if (!row.channel) row.channel = `ch${rowIndex + 1}`;
+      return row;
+    });
+    setMetricRows(normalizeSummaryUnits(rows), name || "Summary CSV");
+  }
+
+  function normalizeSummaryUnits(rows) {
+    const voltageMetrics = [
+      "amplitude_peak_to_peak",
+      "signal_peak_to_peak",
+      "peak_top_mean",
+      "peak_top_std",
+      "signal_mean",
+      "signal_std",
+      "signal_min",
+      "signal_max"
+    ];
+    const powerMetrics = ["dominant_power", "band_total_power"];
+    const amplitudes = rows.map((row) => Number(row.amplitude_peak_to_peak ?? row.signal_peak_to_peak)).filter(Number.isFinite);
+    const looksLikeVolts = amplitudes.length > 0 && Math.max(...amplitudes.map(Math.abs)) < 0.1;
+    if (!looksLikeVolts) return rows;
+    return rows.map((row) => {
+      const next = { ...row };
+      voltageMetrics.forEach((metric) => {
+        const value = Number(next[metric]);
+        if (Number.isFinite(value)) next[metric] = value * voltsToMillivolts;
+      });
+      powerMetrics.forEach((metric) => {
+        const value = Number(next[metric]);
+        if (Number.isFinite(value)) next[metric] = value * voltsToMillivolts * voltsToMillivolts;
+      });
+      return next;
+    });
+  }
+
+  function setData(next) {
+    state.baseTimes = next.times;
+    state.baseFrames = next.frames;
+    state.channels = next.channels;
+    state.source = next.source;
+    state.unit = next.unit || "mV";
+    state.frame = 0;
+    state.channel = Math.min(state.channel, Math.max(0, next.channels.length - 1));
+    applyTransform();
+    timeInput.max = String(Math.max(0, state.frames.length - 1));
+    timeInput.value = "0";
+    channelSelect.innerHTML = "";
+    next.channels.forEach((name, i) => {
+      const option = document.createElement("option");
+      option.value = String(i);
+      option.textContent = `${i + 1}: ${name}`;
+      channelSelect.appendChild(option);
+    });
+    channelSelect.value = String(state.channel);
+    update();
+    scheduleAutoSummary();
+  }
+
+  function scheduleAutoSummary() {
+    metricDescription.textContent = lang() === "ja" ? "自動summaryを計算中..." : "Computing auto summary...";
+    window.setTimeout(() => {
+      setMetricRows(computeMetricRowsFromSignal(), `${state.source} auto summary`);
+    }, 20);
+  }
+
+  function applyTransform() {
+    state.transform = transformInput.value;
+    let times = state.baseTimes;
+    let frames = state.baseFrames;
+    if (state.transform === "integral") {
+      const integral = makeIntegralFrames(state.baseTimes, state.baseFrames);
+      times = integral.times;
+      frames = integral.frames;
+    } else if (state.transform === "fft-band") {
+      const fft = makeFftBandFrame(state.baseTimes, state.baseFrames);
+      times = fft.times;
+      frames = fft.frames;
+    }
+    state.times = times;
+    state.frames = frames;
+    state.frame = Math.min(state.frame, Math.max(0, state.frames.length - 1));
+    const range = minMaxNested(state.frames);
+    state.min = range.min;
+    state.max = range.max;
+    timeInput.max = String(Math.max(0, state.frames.length - 1));
+    timeInput.value = String(state.frame);
+    resetPlaybackClock();
+  }
+
+  function makeIntegralFrames(times, frames) {
+    if (!frames.length) return { times: [], frames: [] };
+    const means = Array.from({ length: 64 }, (_, channelIndex) => {
+      return mean(frames.map((frame) => Number(frame[channelIndex])));
+    });
+    const sums = Array.from({ length: 64 }, () => 0);
+    const out = [sums.slice()];
+    for (let i = 1; i < frames.length; i += 1) {
+      const dt = Number.isFinite(times[i] - times[i - 1]) ? times[i] - times[i - 1] : 0;
+      for (let channelIndex = 0; channelIndex < 64; channelIndex += 1) {
+        const previous = (frames[i - 1][channelIndex] || 0) - means[channelIndex];
+        const current = (frames[i][channelIndex] || 0) - means[channelIndex];
+        sums[channelIndex] += 0.5 * (previous + current) * dt;
+      }
+      out.push(sums.slice());
+    }
+    return { times, frames: out };
+  }
+
+  function makeFftBandFrame(times, frames) {
+    if (!frames.length) return { times: [0], frames: [Array.from({ length: 64 }, () => 0)] };
+    const dt = estimateSamplingInterval(times);
+    const values = [];
+    for (let channelIndex = 0; channelIndex < 64; channelIndex += 1) {
+      const signal = frames.map((frame) => Number(frame[channelIndex]));
+      const fft = linearAmplitudeSpectrum(signal, dt, fftLength);
+      values.push(fft.bandAmplitudeSum);
+    }
+    return {
+      times: [times[Math.min(fftLength, times.length) - 1] || 0],
+      frames: [values]
+    };
+  }
+
+  function computeMetricRowsFromSignal() {
+    const rows = [];
+    const dt = estimateSamplingInterval(state.times);
+    const samplingFrequency = dt > 0 ? 1 / dt : NaN;
+    const nyquist = Number.isFinite(samplingFrequency) ? samplingFrequency / 2 : NaN;
+    for (let channelIndex = 0; channelIndex < state.channels.length; channelIndex += 1) {
+      const values = state.frames.map((frame) => Number(frame[channelIndex]));
+      const finiteValues = values.filter(Number.isFinite);
+      const amplitudePeakToPeak = finiteValues.length ? Math.max(...finiteValues) - Math.min(...finiteValues) : NaN;
+      const peaks = detectPeaks(state.times, values, autoPeakThreshold);
+      const intervals = [];
+      for (let i = 1; i < peaks.times.length; i += 1) intervals.push(peaks.times[i] - peaks.times[i - 1]);
+      const intervalMean = mean(intervals);
+      const freq = dominantFrequency(state.times, values, dt, nyquist);
+      const integrals = integralFeatures(state.times, values);
+      const centered = centerFinite(values);
+      const rms = Math.sqrt(mean(centered.map((value) => value * value)));
+      rows.push({
+        channel: state.channels[channelIndex] || `ch${channelIndex + 1}`,
+        channel_index_0based: channelIndex,
+        channel_number: channelIndex + 1,
+        n_peaks: peaks.values.length,
+        amplitude_peak_to_peak: amplitudePeakToPeak,
+        peak_top_mean: mean(peaks.values),
+        peak_top_std: std(peaks.values),
+        first_peak_time: peaks.times[0] ?? NaN,
+        last_peak_time: peaks.times[peaks.times.length - 1] ?? NaN,
+        interval_mean: intervalMean,
+        interval_std: std(intervals),
+        peak_interval_frequency_hz: Number.isFinite(intervalMean) && intervalMean > 0 ? 1 / intervalMean : NaN,
+        peaks_per_min: Number.isFinite(intervalMean) && intervalMean > 0 ? 60 / intervalMean : NaN,
+        threshold: autoPeakThreshold,
+        dominant_frequency_hz: freq.frequency,
+        dominant_period_s: freq.frequency > 0 ? 1 / freq.frequency : NaN,
+        dominant_power: freq.power,
+        band_total_power: freq.totalPower,
+        dominant_linear_amplitude: freq.amplitude,
+        band_linear_amplitude_sum: freq.totalAmplitude,
+        spectral_centroid_hz: freq.centroid,
+        sampling_interval_s: dt,
+        sampling_frequency_hz: samplingFrequency,
+        signal_mean: mean(finiteValues),
+        signal_std: std(finiteValues),
+        signal_min: finiteValues.length ? Math.min(...finiteValues) : NaN,
+        signal_max: finiteValues.length ? Math.max(...finiteValues) : NaN,
+        signal_peak_to_peak: amplitudePeakToPeak,
+        signal_rms_adc_count: rms,
+        ...integrals
+      });
+    }
+    return rows;
+  }
+
+  function estimateSamplingInterval(times) {
+    const diffs = [];
+    for (let i = 1; i < times.length; i += 1) {
+      const diff = Number(times[i]) - Number(times[i - 1]);
+      if (Number.isFinite(diff) && diff > 0) diffs.push(diff);
+    }
+    if (!diffs.length) return NaN;
+    diffs.sort((a, b) => a - b);
+    return diffs[Math.floor(diffs.length / 2)];
+  }
+
+  function detectPeaks(times, values, threshold) {
+    const peakTimes = [];
+    const peakValues = [];
+    for (let i = 1; i < values.length - 1; i += 1) {
+      const previous = values[i - 1];
+      const current = values[i];
+      const next = values[i + 1];
+      if (
+        Number.isFinite(previous)
+        && Number.isFinite(current)
+        && Number.isFinite(next)
+        && previous >= current
+        && current <= next
+        && current < threshold
+      ) {
+        peakTimes.push(Number(times[i]));
+        peakValues.push(current);
+      }
+    }
+    return { times: peakTimes, values: peakValues };
+  }
+
+  function dominantFrequency(times, values, dt, nyquist) {
+    if (!Number.isFinite(dt) || dt <= 0) {
+      return { frequency: NaN, power: NaN, totalPower: NaN, centroid: NaN, amplitude: NaN, totalAmplitude: NaN };
+    }
+    const spectrum = linearAmplitudeSpectrum(values, dt, fftLength);
+    const frequencies = spectrum.frequencies;
+    const amplitudes = spectrum.amplitudes;
+    let bestFrequency = NaN;
+    let bestAmplitude = -Infinity;
+    let totalAmplitude = 0;
+    let weightedFrequency = 0;
+    for (let i = 0; i < frequencies.length; i += 1) {
+      const frequency = frequencies[i];
+      if (frequency < fftMinFrequency || frequency > fftMaxFrequency) continue;
+      const amplitude = amplitudes[i];
+      totalAmplitude += amplitude;
+      weightedFrequency += frequency * amplitude;
+      if (amplitude > bestAmplitude) {
+        bestAmplitude = amplitude;
+        bestFrequency = frequency;
+      }
+    }
+    const bestPower = Number.isFinite(bestAmplitude) ? bestAmplitude * bestAmplitude : NaN;
+    const totalPower = amplitudes.reduce((sum, amplitude, i) => {
+      const frequency = frequencies[i];
+      return frequency >= fftMinFrequency && frequency <= fftMaxFrequency ? sum + amplitude * amplitude : sum;
+    }, 0);
+    return {
+      frequency: bestFrequency,
+      amplitude: bestAmplitude > -Infinity ? bestAmplitude : NaN,
+      totalAmplitude: totalAmplitude || NaN,
+      power: bestPower,
+      totalPower: totalPower || NaN,
+      centroid: totalAmplitude > 0 ? weightedFrequency / totalAmplitude : NaN
+    };
+  }
+
+  function linearAmplitudeSpectrum(values, dt, requestedN) {
+    const finite = values.filter(Number.isFinite);
+    if (finite.length < 3 || !Number.isFinite(dt) || dt <= 0) {
+      return { frequencies: [], amplitudes: [], bandAmplitudeSum: NaN };
+    }
+    const n = Math.min(requestedN, finite.length);
+    const sampled = finite.slice(0, n);
+    const signalMean = mean(sampled);
+    const real = new Array(n);
+    const imag = new Array(n).fill(0);
+    for (let i = 0; i < n; i += 1) {
+      const window = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / n);
+      real[i] = (sampled[i] - signalMean) * window;
+    }
+    fftInPlace(real, imag);
+    const frequencies = [];
+    const amplitudes = [];
+    let bandAmplitudeSum = 0;
+    const maxBins = Math.floor(n / 2);
+    for (let k = 0; k <= maxBins; k += 1) {
+      const frequency = k / (n * dt);
+      const amplitude = (4 / n) * Math.hypot(real[k], imag[k]);
+      frequencies.push(frequency);
+      amplitudes.push(amplitude);
+      if (frequency >= fftMinFrequency && frequency <= fftMaxFrequency) {
+        bandAmplitudeSum += amplitude;
+      }
+    }
+    return { frequencies, amplitudes, bandAmplitudeSum };
+  }
+
+  function fftInPlace(real, imag) {
+    const n = real.length;
+    if (n < 2 || (n & (n - 1)) !== 0) return dftInPlace(real, imag);
+    for (let i = 1, j = 0; i < n; i += 1) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) {
+        [real[i], real[j]] = [real[j], real[i]];
+        [imag[i], imag[j]] = [imag[j], imag[i]];
+      }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const angle = -2 * Math.PI / len;
+      const wLenReal = Math.cos(angle);
+      const wLenImag = Math.sin(angle);
+      for (let i = 0; i < n; i += len) {
+        let wReal = 1;
+        let wImag = 0;
+        for (let j = 0; j < len / 2; j += 1) {
+          const uReal = real[i + j];
+          const uImag = imag[i + j];
+          const vReal = real[i + j + len / 2] * wReal - imag[i + j + len / 2] * wImag;
+          const vImag = real[i + j + len / 2] * wImag + imag[i + j + len / 2] * wReal;
+          real[i + j] = uReal + vReal;
+          imag[i + j] = uImag + vImag;
+          real[i + j + len / 2] = uReal - vReal;
+          imag[i + j + len / 2] = uImag - vImag;
+          const nextReal = wReal * wLenReal - wImag * wLenImag;
+          wImag = wReal * wLenImag + wImag * wLenReal;
+          wReal = nextReal;
+        }
+      }
+    }
+  }
+
+  function dftInPlace(real, imag) {
+    const n = real.length;
+    const outReal = new Array(n).fill(0);
+    const outImag = new Array(n).fill(0);
+    for (let k = 0; k < n; k += 1) {
+      for (let i = 0; i < n; i += 1) {
+        const angle = -2 * Math.PI * k * i / n;
+        outReal[k] += real[i] * Math.cos(angle) - imag[i] * Math.sin(angle);
+        outImag[k] += real[i] * Math.sin(angle) + imag[i] * Math.cos(angle);
+      }
+    }
+    for (let i = 0; i < n; i += 1) {
+      real[i] = outReal[i];
+      imag[i] = outImag[i];
+    }
+  }
+
+  function centerFinite(values) {
+    const m = mean(values);
+    return values.filter(Number.isFinite).map((value) => value - m);
+  }
+
+  function integralFeatures(times, values) {
+    const m = mean(values);
+    const centered = values.map((value) => Number.isFinite(value) ? value - m : NaN);
+    let signed = 0;
+    let absolute = 0;
+    let positive = 0;
+    let negative = 0;
+    for (let i = 1; i < centered.length; i += 1) {
+      const dt = times[i] - times[i - 1];
+      const a = centered[i - 1];
+      const b = centered[i];
+      if (!Number.isFinite(dt) || !Number.isFinite(a) || !Number.isFinite(b)) continue;
+      const area = 0.5 * (a + b) * dt;
+      signed += area;
+      absolute += 0.5 * (Math.abs(a) + Math.abs(b)) * dt;
+      positive += 0.5 * (Math.max(0, a) + Math.max(0, b)) * dt;
+      negative += 0.5 * (Math.min(0, a) + Math.min(0, b)) * dt;
+    }
+    return {
+      signed_auc_adc_count_s: signed,
+      absolute_auc_adc_count_s: absolute,
+      positive_auc_adc_count_s: positive,
+      negative_auc_adc_count_s: negative,
+      net_auc_balance: absolute > 0 ? signed / absolute : NaN
+    };
+  }
+
+  function mean(values) {
+    const finite = values.filter(Number.isFinite);
+    if (!finite.length) return NaN;
+    return finite.reduce((sum, value) => sum + value, 0) / finite.length;
+  }
+
+  function std(values) {
+    const finite = values.filter(Number.isFinite);
+    if (finite.length < 2) return NaN;
+    const m = mean(finite);
+    const variance = finite.reduce((sum, value) => sum + (value - m) ** 2, 0) / (finite.length - 1);
+    return Math.sqrt(variance);
+  }
+
+  function setMetricRows(rows, source) {
+    metricState.rows = [...rows].sort((a, b) => Number(a.channel_index_0based) - Number(b.channel_index_0based));
+    metricState.source = source;
+    metricState.metrics = preferredMetrics.filter((metric) => metricState.rows.some((row) => Number.isFinite(finiteMetricValue(row[metric]))));
+    if (!metricState.metrics.includes(metricState.selectedMetric)) {
+      metricState.selectedMetric = metricState.metrics[0] || "";
+    }
+    metricState.selectedIndex = Math.min(metricState.selectedIndex, Math.max(0, metricState.rows.length - 1));
+
+    metricSelect.innerHTML = "";
+    metricState.metrics.forEach((metric) => {
+      const option = document.createElement("option");
+      option.value = metric;
+      option.textContent = metricLabel(metric);
+      metricSelect.appendChild(option);
+    });
+    metricSelect.value = metricState.selectedMetric;
+
+    metricChannelSelect.innerHTML = "";
+    metricState.rows.forEach((row, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `${row.channel_number}: ${row.channel}`;
+      metricChannelSelect.appendChild(option);
+    });
+    metricChannelSelect.value = String(metricState.selectedIndex);
+    updateMetrics();
+  }
+
+  function resizeCanvas(canvas) {
+    const box = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(box.width * dpr));
+    canvas.height = Math.max(1, Math.round(box.height * dpr));
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w: box.width, h: box.height };
+  }
+
+  function norm(value) {
+    if (!Number.isFinite(value) || state.max === state.min) return 0.5;
+    return (value - state.min) / (state.max - state.min);
+  }
+
+  function color(t) {
+    const clamped = Math.max(0, Math.min(1, t));
+    const a = clamped < 0.5 ? hexToRgb("#0f65b7") : hexToRgb("#f7f7f7");
+    const b = clamped < 0.5 ? hexToRgb("#f7f7f7") : hexToRgb("#c2455a");
+    const k = clamped < 0.5 ? clamped * 2 : (clamped - 0.5) * 2;
+    const mixed = a.map((v, i) => Math.round(v + (b[i] - v) * k));
+    return `rgb(${mixed[0]},${mixed[1]},${mixed[2]})`;
+  }
+
+  function hexToRgb(hex) {
+    const value = Number.parseInt(hex.slice(1), 16);
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+  }
+
+  function project([x0, y0, z0], w, h) {
+    const cy = Math.cos(state.yaw);
+    const sy = Math.sin(state.yaw);
+    const cp = Math.cos(state.pitch);
+    const sp = Math.sin(state.pitch);
+    const x1 = x0 * cy - y0 * sy;
+    const y1 = x0 * sy + y0 * cy;
+    const y2 = y1 * cp - z0 * sp;
+    const z2 = y1 * sp + z0 * cp;
+    const zoom = Math.min(w, h) * 0.1;
+    return {
+      x: w * 0.5 + x1 * zoom,
+      y: h * 0.58 - z2 * zoom,
+      depth: y2
+    };
+  }
+
+  function drawSurface() {
+    const { ctx, w, h } = resizeCanvas(canvases.surface);
+    const frame = state.frames[state.frame] || [];
+    const center = 3.5;
+    const height = state.height / 100;
+    const cells = [];
+    ctx.clearRect(0, 0, w, h);
+    for (let y = 0; y < 7; y += 1) {
+      for (let x = 0; x < 7; x += 1) {
+        const ids = [y * 8 + x, y * 8 + x + 1, (y + 1) * 8 + x + 1, (y + 1) * 8 + x];
+        const pts = ids.map((id) => {
+          const gx = id % 8;
+          const gy = Math.floor(id / 8);
+          const z = (norm(frame[id]) - 0.5) * 5.4 * height;
+          return project([gx - center, gy - center, z], w, h);
+        });
+        cells.push({
+          pts,
+          value: ids.reduce((sum, id) => sum + norm(frame[id]), 0) / ids.length,
+          depth: pts.reduce((sum, p) => sum + p.depth, 0) / pts.length
+        });
+      }
+    }
+    cells.sort((a, b) => b.depth - a.depth);
+    ctx.lineWidth = 1;
+    for (const cell of cells) {
+      ctx.beginPath();
+      cell.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      ctx.closePath();
+      ctx.fillStyle = color(cell.value);
+      ctx.globalAlpha = 0.82;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "rgba(15,101,183,.24)";
+      ctx.stroke();
+    }
+    ctx.fillStyle = getComputedStyle(document.body).color;
+    ctx.font = "12px system-ui";
+    ctx.fillText(`t = ${format(state.times[state.frame])} s`, 12, 22);
+    ctx.fillText(t("drag"), 12, 40);
+  }
+
+  function drawHeatmap() {
+    const { ctx, w, h } = resizeCanvas(canvases.heatmap);
+    const frame = state.frames[state.frame] || [];
+    ctx.clearRect(0, 0, w, h);
+    const side = Math.min(w, h) - 28;
+    const left = (w - side) / 2;
+    const top = (h - side) / 2;
+    const cell = side / 8;
+    for (let y = 0; y < 8; y += 1) {
+      for (let x = 0; x < 8; x += 1) {
+        const id = y * 8 + x;
+        ctx.fillStyle = color(norm(frame[id]));
+        ctx.fillRect(left + x * cell, top + y * cell, cell, cell);
+        ctx.strokeStyle = "rgba(15,101,183,.22)";
+        ctx.strokeRect(left + x * cell, top + y * cell, cell, cell);
+        if (id === state.channel) {
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "#004f9f";
+          ctx.strokeRect(left + x * cell + 1.5, top + y * cell + 1.5, cell - 3, cell - 3);
+          ctx.lineWidth = 1;
+        }
+      }
+    }
+  }
+
+  function drawTrace() {
+    const { ctx, w, h } = resizeCanvas(canvases.trace);
+    ctx.clearRect(0, 0, w, h);
+    const values = state.frames.map((frame) => frame[state.channel]);
+    drawAxes(ctx, w, h);
+    drawLine(ctx, w, h, values, state.min, state.max, "#0f65b7");
+    const x = map(state.frame, 0, Math.max(1, state.frames.length - 1), 34, w - 12);
+    ctx.strokeStyle = "#004f9f";
+    ctx.beginPath();
+    ctx.moveTo(x, 10);
+    ctx.lineTo(x, h - 26);
+    ctx.stroke();
+    ctx.fillStyle = getComputedStyle(document.body).color;
+    ctx.font = "12px system-ui";
+    ctx.fillText(`${state.channels[state.channel] || ""}  ${format(values[state.frame])} ${signalUnit()}`, 38, 22);
+  }
+
+  function drawProfile() {
+    const { ctx, w, h } = resizeCanvas(canvases.profile);
+    const frame = state.frames[state.frame] || [];
+    ctx.clearRect(0, 0, w, h);
+    drawAxes(ctx, w, h);
+    drawLine(ctx, w, h, frame, state.min, state.max, "#2f7fd0");
+    const x = map(state.channel, 0, 63, 34, w - 12);
+    ctx.strokeStyle = "#004f9f";
+    ctx.beginPath();
+    ctx.moveTo(x, 10);
+    ctx.lineTo(x, h - 26);
+    ctx.stroke();
+  }
+
+  function metricValues(metric) {
+    return metricState.rows.map((row) => finiteMetricValue(row[metric])).filter(Number.isFinite);
+  }
+
+  function extent(values) {
+    if (!values.length) return [0, 1];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    return min === max ? [min - 0.5, max + 0.5] : [min, max];
+  }
+
+  function drawMetricMap() {
+    const { ctx, w, h } = resizeCanvas(canvases.metricMap);
+    const metric = metricState.selectedMetric;
+    const [min, max] = extent(metricValues(metric));
+    const side = Math.min(w - 24, h - 62);
+    const left = (w - side) / 2;
+    const top = Math.max(44, (h - side) / 2 + 14);
+    const cell = side / 8;
+    ctx.clearRect(0, 0, w, h);
+    metricState.rows.slice(0, 64).forEach((row, rowIndex) => {
+      const index = Number(row.channel_index_0based);
+      const x = index % 8;
+      const y = Math.floor(index / 8);
+      const value = finiteMetricValue(row[metric]);
+      ctx.fillStyle = Number.isFinite(value) ? color(normMetric(value, min, max)) : "rgba(128,128,128,.25)";
+      ctx.fillRect(left + x * cell, top + y * cell, cell, cell);
+      ctx.strokeStyle = "rgba(15,101,183,.22)";
+      ctx.strokeRect(left + x * cell, top + y * cell, cell, cell);
+      ctx.fillStyle = Math.abs(normMetric(value, min, max) - 0.5) > 0.36 ? "#fff" : "#1c2633";
+      ctx.font = "11px system-ui";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(row.channel_number), left + x * cell + cell / 2, top + y * cell + cell / 2);
+      if (rowIndex === metricState.selectedIndex) {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#004f9f";
+        ctx.strokeRect(left + x * cell + 2, top + y * cell + 2, cell - 4, cell - 4);
+        ctx.lineWidth = 1;
+      }
+    });
+    ctx.fillStyle = getComputedStyle(document.body).color;
+    ctx.font = "12px system-ui";
+    ctx.textAlign = "left";
+    ctx.fillText(`${metricLabel(metric)}: ${format(min)} to ${format(max)}`, 12, 18);
+  }
+
+  function drawMetricScatter() {
+    const { ctx, w, h } = resizeCanvas(canvases.metricScatter);
+    const xMetric = "dominant_frequency_hz";
+    const yMetric = "peak_interval_frequency_hz";
+    const [xMin, xMax] = extent(metricValues(xMetric));
+    const [yMin, yMax] = extent(metricValues(yMetric));
+    ctx.clearRect(0, 0, w, h);
+    drawAxes(ctx, w, h);
+    metricState.rows.forEach((row, index) => {
+      const xValue = finiteMetricValue(row[xMetric]);
+      const yValue = finiteMetricValue(row[yMetric]);
+      if (!Number.isFinite(xValue) || !Number.isFinite(yValue)) return;
+      const x = map(xValue, xMin, xMax, 34, w - 12);
+      const y = map(yValue, yMin, yMax, h - 26, 10);
+      ctx.beginPath();
+      ctx.arc(x, y, index === metricState.selectedIndex ? 5 : 3, 0, Math.PI * 2);
+      ctx.fillStyle = index === metricState.selectedIndex ? "#004f9f" : "#0f65b7";
+      ctx.fill();
+    });
+    ctx.fillStyle = getComputedStyle(document.body).color;
+    ctx.font = "12px system-ui";
+    ctx.fillText(t("scatterX"), 38, h - 7);
+  }
+
+  function drawMetricProfile() {
+    const { ctx, w, h } = resizeCanvas(canvases.metricProfile);
+    const metric = metricState.selectedMetric;
+    const values = metricState.rows.map((row) => finiteMetricValue(row[metric]));
+    const [min, max] = extent(values.filter(Number.isFinite));
+    ctx.clearRect(0, 0, w, h);
+    drawAxes(ctx, w, h);
+    drawLine(ctx, w, h, values, min, max, "#2f7fd0");
+    const selectedValue = values[metricState.selectedIndex];
+    if (Number.isFinite(selectedValue)) {
+      const x = map(metricState.selectedIndex, 0, Math.max(1, values.length - 1), 34, w - 12);
+      ctx.strokeStyle = "#004f9f";
+      ctx.beginPath();
+      ctx.moveTo(x, 10);
+      ctx.lineTo(x, h - 26);
+      ctx.stroke();
+    }
+    ctx.fillStyle = getComputedStyle(document.body).color;
+    ctx.font = "12px system-ui";
+    ctx.fillText(metricLabel(metric), 38, 22);
+  }
+
+  function renderMetricDetails() {
+    const row = metricState.rows[metricState.selectedIndex] || {};
+    const metrics = [
+      "amplitude_peak_to_peak",
+      "dominant_frequency_hz",
+      "peak_interval_frequency_hz",
+      "n_peaks",
+      "interval_mean",
+      "peaks_per_min",
+      "dominant_period_s",
+      "dominant_linear_amplitude",
+      "band_linear_amplitude_sum",
+      "absolute_auc_adc_count_s",
+      "signal_rms_adc_count",
+      "dominant_power",
+      "peak_top_mean"
+    ];
+    metricDetails.innerHTML = "";
+    metrics.forEach((metric) => {
+      const card = document.createElement("div");
+      card.className = "metric-card";
+      const label = document.createElement("span");
+      label.textContent = metricLabel(metric);
+      const value = document.createElement("strong");
+      value.textContent = format(row[metric]) || t("noValue");
+      card.append(label, value);
+      metricDetails.appendChild(card);
+    });
+  }
+
+  function normMetric(value, min, max) {
+    if (!Number.isFinite(value) || max === min) return 0.5;
+    return (value - min) / (max - min);
+  }
+
+  function drawAxes(ctx, w, h) {
+    ctx.strokeStyle = "rgba(128,128,128,.45)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(34, 10);
+    ctx.lineTo(34, h - 26);
+    ctx.lineTo(w - 12, h - 26);
+    ctx.stroke();
+  }
+
+  function drawLine(ctx, w, h, values, minValue, maxValue, stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    let started = false;
+    values.forEach((value, i) => {
+      if (!Number.isFinite(value)) return;
+      const x = map(i, 0, Math.max(1, values.length - 1), 34, w - 12);
+      const y = map(value, minValue, maxValue, h - 26, 10);
+      if (!started) {
+        ctx.moveTo(x, y);
+        started = true;
+      }
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  function map(value, inMin, inMax, outMin, outMax) {
+    if (inMax === inMin) return (outMin + outMax) / 2;
+    return outMin + ((value - inMin) / (inMax - inMin)) * (outMax - outMin);
+  }
+
+  function format(value) {
+    if (!Number.isFinite(value)) return "";
+    if (value === 0) return "0";
+    if (Number.isInteger(value) && Math.abs(value) < 10000) return String(value);
+    if (Math.abs(value) < 0.01 || Math.abs(value) >= 100) return value.toExponential(2);
+    return value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+  }
+
+  function updateLabels() {
+    timeLabel.textContent = `${format(state.times[state.frame])} s  frame ${state.frame + 1}/${state.frames.length}`;
+    heightLabel.textContent = `${state.height}%`;
+    sourceLabel.textContent = state.source;
+    framesLabel.textContent = String(state.frames.length);
+    channelsLabel.textContent = String(state.channels.length);
+    minLabel.textContent = `${format(state.min)} ${signalUnit()}`;
+    maxLabel.textContent = `${format(state.max)} ${signalUnit()}`;
+  }
+
+  function applyLanguage() {
+    document.documentElement.lang = lang();
+    document.getElementById("label-csv").textContent = t("csv");
+    document.getElementById("label-time").textContent = t("time");
+    document.getElementById("label-channel").textContent = t("channel");
+    document.getElementById("label-height").textContent = t("height");
+    document.getElementById("label-speed").textContent = t("speed");
+    document.getElementById("label-transform").textContent = t("transform");
+    document.getElementById("label-language").textContent = t("language");
+    playButton.textContent = state.playing ? t("pause") : t("play");
+    document.getElementById("title-surface").textContent = t("surface");
+    document.getElementById("title-heatmap").textContent = t("heatmap");
+    document.getElementById("title-trace").textContent = t("trace");
+    document.getElementById("title-profile").textContent = t("profile");
+    document.getElementById("status-source").textContent = t("source");
+    document.getElementById("status-frames").textContent = t("frames");
+    document.getElementById("status-channels").textContent = t("channels");
+    document.getElementById("status-min").textContent = t("min");
+    document.getElementById("status-max").textContent = t("max");
+    document.getElementById("label-summary").textContent = t("summary");
+    document.getElementById("label-metric").textContent = t("metric");
+    document.getElementById("label-metric-channel").textContent = t("metricChannel");
+    document.getElementById("title-metric-map").textContent = t("metricMap");
+    document.getElementById("title-scatter").textContent = t("scatter");
+    document.getElementById("title-metric-profile").textContent = t("metricProfile");
+    document.getElementById("title-metric-detail").textContent = t("metricDetail");
+
+    const currentMetric = metricState.selectedMetric;
+    metricSelect.innerHTML = "";
+    metricState.metrics.forEach((metric) => {
+      const option = document.createElement("option");
+      option.value = metric;
+      option.textContent = metricLabel(metric);
+      metricSelect.appendChild(option);
+    });
+    metricSelect.value = currentMetric;
+    metricDescription.textContent = metricHelp(currentMetric);
+  }
+
+  function update() {
+    applyLanguage();
+    updateLabels();
+    drawSurface();
+    drawHeatmap();
+    drawTrace();
+    drawProfile();
+  }
+
+  function updateMetrics() {
+    applyLanguage();
+    drawMetricMap();
+    drawMetricScatter();
+    drawMetricProfile();
+    renderMetricDetails();
+  }
+
+  function selectChannel(channelIndex) {
+    if (!Number.isInteger(channelIndex) || channelIndex < 0 || channelIndex >= state.channels.length) return;
+    state.channel = channelIndex;
+    channelSelect.value = String(channelIndex);
+    if (metricState.rows.length) {
+      const rowIndex = metricState.rows.findIndex((row) => Number(row.channel_index_0based) === channelIndex);
+      if (rowIndex >= 0) {
+        metricState.selectedIndex = rowIndex;
+        metricChannelSelect.value = String(rowIndex);
+      }
+    }
+    update();
+    updateMetrics();
+  }
+
+  function heatmapCellFromEvent(event) {
+    const box = canvases.heatmap.getBoundingClientRect();
+    const side = Math.min(box.width, box.height) - 28;
+    const left = (box.width - side) / 2;
+    const top = (box.height - side) / 2;
+    const cell = side / 8;
+    const x = Math.floor((event.clientX - box.left - left) / cell);
+    const y = Math.floor((event.clientY - box.top - top) / cell);
+    if (x < 0 || x >= 8 || y < 0 || y >= 8) return null;
+    return y * 8 + x;
+  }
+
+  function metricMapCellFromEvent(event) {
+    const box = canvases.metricMap.getBoundingClientRect();
+    const side = Math.min(box.width - 24, box.height - 62);
+    const left = (box.width - side) / 2;
+    const top = Math.max(44, (box.height - side) / 2 + 14);
+    const cell = side / 8;
+    const x = Math.floor((event.clientX - box.left - left) / cell);
+    const y = Math.floor((event.clientY - box.top - top) / cell);
+    if (x < 0 || x >= 8 || y < 0 || y >= 8) return null;
+    return y * 8 + x;
+  }
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.addEventListener("load", () => loadCsv(String(reader.result || ""), file.name));
+    reader.readAsText(file);
+  });
+
+  summaryInput.addEventListener("change", () => {
+    const file = summaryInput.files && summaryInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.addEventListener("load", () => loadSummaryCsv(String(reader.result || ""), file.name));
+    reader.readAsText(file);
+  });
+
+  timeInput.addEventListener("input", () => {
+    state.frame = Number(timeInput.value);
+    resetPlaybackClock();
+    update();
+  });
+
+  channelSelect.addEventListener("change", () => {
+    state.channel = Number(channelSelect.value);
+    if (metricState.rows.length) {
+      metricState.selectedIndex = Math.min(state.channel, metricState.rows.length - 1);
+      metricChannelSelect.value = String(metricState.selectedIndex);
+      updateMetrics();
+    }
+    update();
+  });
+
+  metricSelect.addEventListener("change", () => {
+    metricState.selectedMetric = metricSelect.value;
+    updateMetrics();
+  });
+
+  languageSelect.addEventListener("change", () => {
+    applyLanguage();
+    update();
+    updateMetrics();
+  });
+
+  metricChannelSelect.addEventListener("change", () => {
+    metricState.selectedIndex = Number(metricChannelSelect.value);
+    updateMetrics();
+  });
+
+  heightInput.addEventListener("input", () => {
+    state.height = Number(heightInput.value);
+    update();
+  });
+
+  speedInput.addEventListener("change", () => {
+    state.speed = Number(speedInput.value) || 1;
+    resetPlaybackClock();
+  });
+
+  transformInput.addEventListener("change", () => {
+    state.frame = 0;
+    applyTransform();
+    update();
+  });
+
+  playButton.addEventListener("click", () => {
+    state.playing = !state.playing;
+    playButton.textContent = state.playing ? t("pause") : t("play");
+    if (state.playing) {
+      resetPlaybackClock();
+      requestAnimationFrame(tick);
+    }
+  });
+
+  canvases.surface.addEventListener("pointerdown", (event) => {
+    state.drag = { x: event.clientX, y: event.clientY, yaw: state.yaw, pitch: state.pitch };
+    canvases.surface.setPointerCapture(event.pointerId);
+  });
+
+  canvases.surface.addEventListener("pointermove", (event) => {
+    if (!state.drag) return;
+    state.yaw = state.drag.yaw + (event.clientX - state.drag.x) * 0.008;
+    state.pitch = Math.max(0.2, Math.min(1.25, state.drag.pitch + (event.clientY - state.drag.y) * 0.006));
+    update();
+  });
+
+  canvases.surface.addEventListener("pointerup", () => {
+    state.drag = null;
+  });
+
+  canvases.heatmap.addEventListener("click", (event) => {
+    const channelIndex = heatmapCellFromEvent(event);
+    if (channelIndex === null) return;
+    selectChannel(channelIndex);
+  });
+
+  canvases.metricMap.addEventListener("click", (event) => {
+    const channelIndex = metricMapCellFromEvent(event);
+    if (channelIndex === null) return;
+    selectChannel(channelIndex);
+  });
+
+  Object.values(canvases).forEach((canvas) => {
+    new ResizeObserver(() => {
+      update();
+      updateMetrics();
+    }).observe(canvas);
+  });
+
+  function tick() {
+    if (!state.playing) return;
+    if (state.frames.length <= 1) {
+      state.playing = false;
+      playButton.textContent = t("play");
+      return;
+    }
+    const startTime = Number(state.times[state.playbackStartFrame]);
+    const firstTime = Number(state.times[0]);
+    const lastTime = Number(state.times[state.times.length - 1]);
+    const duration = lastTime - firstTime;
+    if (!Number.isFinite(startTime) || !Number.isFinite(duration) || duration <= 0) {
+      state.frame = (state.frame + 1) % state.frames.length;
+    } else {
+      const elapsedSeconds = (performance.now() - state.playbackStartMs) / 1000;
+      const targetTime = firstTime + positiveModulo((startTime - firstTime) + elapsedSeconds * Math.max(0.25, state.speed), duration);
+      state.frame = frameAtTime(targetTime);
+    }
+    timeInput.value = String(state.frame);
+    update();
+    requestAnimationFrame(tick);
+  }
+
+  function positiveModulo(value, period) {
+    return ((value % period) + period) % period;
+  }
+
+  function frameAtTime(targetTime) {
+    let lo = 0;
+    let hi = state.times.length - 1;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (Number(state.times[mid]) < targetTime) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo <= 0) return 0;
+    const previous = Number(state.times[lo - 1]);
+    const current = Number(state.times[lo]);
+    return Math.abs(previous - targetTime) <= Math.abs(current - targetTime) ? lo - 1 : lo;
+  }
+
+  makeDemo();
+})();
+</script>
 </body>
 </html>
