@@ -569,10 +569,10 @@
       metricDetail: "Selected channel metrics",
       drag: "drag to rotate",
       scatterX: "x: FFT dominant frequency",
-      comparisonCsv: "3D comparison CSVs (up to 4)",
+      comparisonCsv: "3D comparison CSVs (up to 6)",
       comparisonTitle: "Simultaneous 3D comparison",
       sharedScale: "Shared color and height scale",
-      comparisonHint: "Choose up to four 64-channel CSVs. Each surface has an independent time slider.",
+      comparisonHint: "Choose up to six 64-channel CSVs. Each surface has an independent time slider.",
       remove: "Remove",
       comparisonTime: "Time",
       noValue: "n/a"
@@ -606,10 +606,10 @@
       metricDetail: "選択チャンネルの指標",
       drag: "ドラッグで回転",
       scatterX: "x: FFT主要周波数",
-      comparisonCsv: "3D比較CSV（最大4件）",
+      comparisonCsv: "3D比較CSV（最大6件）",
       comparisonTitle: "同時3D電位面比較",
       sharedScale: "色と高さのスケールを共通化",
-      comparisonHint: "64チャンネルCSVを最大4件選択できます。各電位面は独立した時刻スライダーで操作します。",
+      comparisonHint: "64チャンネルCSVを最大6件選択できます。各電位面は独立した時刻スライダーで操作します。",
       remove: "削除",
       comparisonTime: "時刻",
       noValue: "なし"
@@ -923,7 +923,7 @@
   }
 
   async function loadComparisonFiles(files) {
-    const selected = Array.from(files).slice(0, 4);
+    const selected = Array.from(files).slice(0, 6);
     const parsed = (await Promise.all(selected.map(async (file) => {
       const data = parseSignalCsv(await file.text(), file.name);
       return data ? {

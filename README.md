@@ -7,7 +7,7 @@ A browser-only, integrated dashboard for 64-channel time-series CSV files.
 1. Open `index.html` in a modern browser.
 2. Select a CSV with one time column followed by 64 channel columns.
 3. Inspect the waveform, 2D map, 3D potential surface, and per-channel metrics.
-4. To compare recordings, select up to four files in the 3D comparison CSV control. Each surface has its own time slider and uses a shared color and height scale.
+4. To compare recordings, select up to six files in the 3D comparison CSV control. Each surface has its own time slider and uses a shared color and height scale.
 
 The initial dashboard display uses synthetic data. Your selected CSV stays on your computer: this page does not upload data or contact a server.
 
