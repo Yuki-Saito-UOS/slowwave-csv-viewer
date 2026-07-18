@@ -248,9 +248,89 @@
     font-weight: 600;
   }
 
+  .comparison-upload {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(280px, 2fr);
+    gap: 12px;
+    align-items: end;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 8px 24px rgb(22 63 110 / 0.06);
+  }
+
+  .comparison-hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .comparison-section {
+    display: grid;
+    gap: 10px;
+  }
+
+  .comparison-heading {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: baseline;
+  }
+
+  .comparison-heading h2 {
+    margin: 0;
+    color: var(--accent-strong);
+    font-size: 16px;
+  }
+
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 12px;
+  }
+
+  .comparison-card {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 8px 24px rgb(22 63 110 / 0.06);
+  }
+
+  .comparison-card-head {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .comparison-card h3 {
+    min-width: 0;
+    margin: 0;
+    color: var(--accent-strong);
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .comparison-card button {
+    width: auto;
+    min-width: 34px;
+    padding: 0 9px;
+  }
+
+  .comparison-card canvas {
+    min-height: 220px;
+    aspect-ratio: 4 / 3;
+  }
+
   @media (max-width: 920px) {
     .toolbar,
     .metric-toolbar,
+    .comparison-upload,
     .dashboard,
     .metrics-dashboard,
     .metric-details {
@@ -347,6 +427,22 @@
     <span><span id="status-max">max</span> <strong id="max-label"></strong></span>
   </section>
 
+  <section class="comparison-upload" aria-label="3D comparison controls">
+    <label>
+      <span id="label-comparison-csv">3D comparison CSVs</span>
+      <input id="comparison-input" type="file" accept=".csv,text/csv" multiple>
+    </label>
+    <p id="comparison-hint" class="comparison-hint"></p>
+  </section>
+
+  <section id="comparison-section" class="comparison-section" hidden aria-labelledby="comparison-title">
+    <div class="comparison-heading">
+      <h2 id="comparison-title">Simultaneous 3D comparison</h2>
+      <span id="comparison-scale" class="value"></span>
+    </div>
+    <div id="comparison-grid" class="comparison-grid"></div>
+  </section>
+
   <section class="metric-toolbar" aria-label="Slow-wave metric controls">
     <label>
       <span id="label-summary">Summary CSV</span>
@@ -403,6 +499,11 @@
   const minLabel = document.getElementById("min-label");
   const maxLabel = document.getElementById("max-label");
   const summaryInput = document.getElementById("summary-input");
+  const comparisonInput = document.getElementById("comparison-input");
+  const comparisonHint = document.getElementById("comparison-hint");
+  const comparisonSection = document.getElementById("comparison-section");
+  const comparisonGrid = document.getElementById("comparison-grid");
+  const comparisonScale = document.getElementById("comparison-scale");
   const metricSelect = document.getElementById("metric-select");
   const metricChannelSelect = document.getElementById("metric-channel-select");
   const metricDetails = document.getElementById("metric-details");
@@ -468,7 +569,13 @@
       metricDetail: "Selected channel metrics",
       drag: "drag to rotate",
       scatterX: "x: FFT dominant frequency",
-    noValue: "n/a"
+      comparisonCsv: "3D comparison CSVs (up to 4)",
+      comparisonTitle: "Simultaneous 3D comparison",
+      sharedScale: "Shared color and height scale",
+      comparisonHint: "Choose up to four 64-channel CSVs. Each surface has an independent time slider.",
+      remove: "Remove",
+      comparisonTime: "Time",
+      noValue: "n/a"
     },
     ja: {
       csv: "電位CSV",
@@ -499,6 +606,12 @@
       metricDetail: "選択チャンネルの指標",
       drag: "ドラッグで回転",
       scatterX: "x: FFT主要周波数",
+      comparisonCsv: "3D比較CSV（最大4件）",
+      comparisonTitle: "同時3D電位面比較",
+      sharedScale: "色と高さのスケールを共通化",
+      comparisonHint: "64チャンネルCSVを最大4件選択できます。各電位面は独立した時刻スライダーで操作します。",
+      remove: "削除",
+      comparisonTime: "時刻",
       noValue: "なし"
     }
   };
@@ -619,6 +732,10 @@
     source: "Demo summary"
   };
 
+  const comparisonState = {
+    datasets: []
+  };
+
   const voltsToMillivolts = 1000;
   const autoPeakThreshold = -4.4;
   const fftMinFrequency = 0.25;
@@ -668,10 +785,14 @@
     return Number.isFinite(min) ? { min, max, maxAbs } : { min: -1, max: 1, maxAbs: 0 };
   }
 
-  function signalUnit() {
-    if (state.transform === "integral") return `${state.unit}*s`;
+  function signalUnitFor(unit) {
+    if (state.transform === "integral") return `${unit}*s`;
     if (state.transform === "fft-band") return "linear amplitude sum";
-    return state.unit;
+    return unit;
+  }
+
+  function signalUnit() {
+    return signalUnitFor(state.unit);
   }
 
   function resetPlaybackClock() {
@@ -767,9 +888,9 @@
     return rows.filter((r) => r.some((v) => v.trim() !== ""));
   }
 
-  function loadCsv(text, name) {
+  function parseSignalCsv(text, name) {
     const rows = parseCsv(text);
-    if (rows.length < 2) return;
+    if (rows.length < 2) return null;
     const header = rows[0].map((v) => v.trim());
     const channels = header.slice(1, 65).map((v, i) => v || `ch${i + 1}`);
     const times = [];
@@ -781,19 +902,92 @@
       times.push(Number.isFinite(t) ? t : rawFrames.length);
       rawFrames.push(values);
     }
-    if (!rawFrames.length) return;
+    if (!rawFrames.length) return null;
     const rawRange = minMaxNested(rawFrames);
     const looksLikeVolts = rawRange.maxAbs > 0 && rawRange.maxAbs < 0.1;
     const frames = looksLikeVolts
       ? rawFrames.map((frame) => frame.map((value) => value * voltsToMillivolts))
       : rawFrames;
-    setData({
+    return {
       times,
       frames,
       channels,
       source: name || "CSV",
       unit: looksLikeVolts ? "mV" : "ADC count"
+    };
+  }
+
+  function loadCsv(text, name) {
+    const parsed = parseSignalCsv(text, name);
+    if (parsed) setData(parsed);
+  }
+
+  async function loadComparisonFiles(files) {
+    const selected = Array.from(files).slice(0, 4);
+    const parsed = (await Promise.all(selected.map(async (file) => {
+      const data = parseSignalCsv(await file.text(), file.name);
+      return data ? {
+        ...data,
+        baseTimes: data.times,
+        baseFrames: data.frames,
+        frame: 0,
+        min: -1,
+        max: 1,
+        canvas: null,
+        timeLabel: null
+      } : null;
+    }))).filter(Boolean);
+    const unit = parsed[0]?.unit;
+    comparisonState.datasets = parsed.filter((dataset) => dataset.unit === unit);
+    applyComparisonTransforms();
+    renderComparisonPanels();
+    comparisonHint.textContent = comparisonState.datasets.length
+      ? `${comparisonState.datasets.length} ${lang() === "ja" ? "件を読み込みました" : "file(s) loaded"}. ${t("sharedScale")}.`
+      : t("comparisonHint");
+  }
+
+  function renderComparisonPanels() {
+    comparisonGrid.replaceChildren();
+    comparisonSection.hidden = !comparisonState.datasets.length;
+    comparisonState.datasets.forEach((dataset, index) => {
+      const card = document.createElement("article");
+      card.className = "comparison-card";
+      const head = document.createElement("div");
+      head.className = "comparison-card-head";
+      const title = document.createElement("h3");
+      title.textContent = dataset.source;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "x";
+      remove.setAttribute("aria-label", `${t("remove")}: ${dataset.source}`);
+      remove.dataset.tooltip = t("remove");
+      remove.addEventListener("click", () => {
+        comparisonState.datasets.splice(index, 1);
+        renderComparisonPanels();
+        renderComparisonSurfaces();
+      });
+      head.append(title, remove);
+      const label = document.createElement("label");
+      const timeText = document.createElement("span");
+      const timeInput = document.createElement("input");
+      timeInput.type = "range";
+      timeInput.min = "0";
+      timeInput.max = String(Math.max(0, dataset.frames.length - 1));
+      timeInput.value = String(dataset.frame);
+      timeInput.addEventListener("input", () => {
+        dataset.frame = Number(timeInput.value);
+        renderComparisonSurfaces();
+      });
+      label.append(timeText, timeInput);
+      const canvas = document.createElement("canvas");
+      canvas.setAttribute("role", "img");
+      canvas.setAttribute("aria-label", `${dataset.source} 3D potential surface`);
+      dataset.canvas = canvas;
+      dataset.timeLabel = timeText;
+      card.append(head, label, canvas);
+      comparisonGrid.appendChild(card);
     });
+    renderComparisonSurfaces();
   }
 
   function loadSummaryCsv(text, name) {
@@ -896,6 +1090,30 @@
     timeInput.max = String(Math.max(0, state.frames.length - 1));
     timeInput.value = String(state.frame);
     resetPlaybackClock();
+  }
+
+  function applyComparisonTransform(dataset) {
+    let times = dataset.baseTimes;
+    let frames = dataset.baseFrames;
+    if (state.transform === "integral") {
+      const integral = makeIntegralFrames(dataset.baseTimes, dataset.baseFrames);
+      times = integral.times;
+      frames = integral.frames;
+    } else if (state.transform === "fft-band") {
+      const fft = makeFftBandFrame(dataset.baseTimes, dataset.baseFrames);
+      times = fft.times;
+      frames = fft.frames;
+    }
+    dataset.times = times;
+    dataset.frames = frames;
+    dataset.frame = Math.min(dataset.frame, Math.max(0, frames.length - 1));
+    const range = minMaxNested(frames);
+    dataset.min = range.min;
+    dataset.max = range.max;
+  }
+
+  function applyComparisonTransforms() {
+    comparisonState.datasets.forEach(applyComparisonTransform);
   }
 
   function makeIntegralFrames(times, frames) {
@@ -1224,9 +1442,9 @@
     return { ctx, w: box.width, h: box.height };
   }
 
-  function norm(value) {
-    if (!Number.isFinite(value) || state.max === state.min) return 0.5;
-    return (value - state.min) / (state.max - state.min);
+  function norm(value, min = state.min, max = state.max) {
+    if (!Number.isFinite(value) || max === min) return 0.5;
+    return (value - min) / (max - min);
   }
 
   function color(t) {
@@ -1243,11 +1461,11 @@
     return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
   }
 
-  function project([x0, y0, z0], w, h) {
-    const cy = Math.cos(state.yaw);
-    const sy = Math.sin(state.yaw);
-    const cp = Math.cos(state.pitch);
-    const sp = Math.sin(state.pitch);
+  function project([x0, y0, z0], w, h, yaw = state.yaw, pitch = state.pitch) {
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    const cp = Math.cos(pitch);
+    const sp = Math.sin(pitch);
     const x1 = x0 * cy - y0 * sy;
     const y1 = x0 * sy + y0 * cy;
     const y2 = y1 * cp - z0 * sp;
@@ -1260,9 +1478,9 @@
     };
   }
 
-  function drawSurface() {
-    const { ctx, w, h } = resizeCanvas(canvases.surface);
-    const frame = state.frames[state.frame] || [];
+  function drawSurfaceFrame(canvas, dataset, range) {
+    const { ctx, w, h } = resizeCanvas(canvas);
+    const frame = dataset.frames[dataset.frame] || [];
     const center = 3.5;
     const height = state.height / 100;
     const cells = [];
@@ -1273,12 +1491,12 @@
         const pts = ids.map((id) => {
           const gx = id % 8;
           const gy = Math.floor(id / 8);
-          const z = (norm(frame[id]) - 0.5) * 5.4 * height;
+          const z = (norm(frame[id], range.min, range.max) - 0.5) * 5.4 * height;
           return project([gx - center, gy - center, z], w, h);
         });
         cells.push({
           pts,
-          value: ids.reduce((sum, id) => sum + norm(frame[id]), 0) / ids.length,
+          value: ids.reduce((sum, id) => sum + norm(frame[id], range.min, range.max), 0) / ids.length,
           depth: pts.reduce((sum, p) => sum + p.depth, 0) / pts.length
         });
       }
@@ -1298,8 +1516,30 @@
     }
     ctx.fillStyle = getComputedStyle(document.body).color;
     ctx.font = "12px system-ui";
-    ctx.fillText(`t = ${format(state.times[state.frame])} s`, 12, 22);
+    ctx.fillText(`t = ${format(dataset.times[dataset.frame])} s`, 12, 22);
     ctx.fillText(t("drag"), 12, 40);
+  }
+
+  function drawSurface() {
+    drawSurfaceFrame(canvases.surface, state, { min: state.min, max: state.max });
+  }
+
+  function comparisonRange() {
+    const frames = comparisonState.datasets.flatMap((dataset) => dataset.frames);
+    return minMaxNested(frames);
+  }
+
+  function renderComparisonSurfaces() {
+    if (!comparisonState.datasets.length) return;
+    const range = comparisonRange();
+    comparisonScale.textContent = `${t("sharedScale")}: ${format(range.min)} to ${format(range.max)} ${signalUnitFor(comparisonState.datasets[0].unit)}`;
+    comparisonState.datasets.forEach((dataset) => {
+      if (!dataset.canvas) return;
+      drawSurfaceFrame(dataset.canvas, dataset, range);
+      if (dataset.timeLabel) {
+        dataset.timeLabel.textContent = `${t("comparisonTime")}: ${format(dataset.times[dataset.frame])} s  frame ${dataset.frame + 1}/${dataset.frames.length}`;
+      }
+    });
   }
 
   function drawHeatmap() {
@@ -1557,6 +1797,9 @@
     document.getElementById("status-min").textContent = t("min");
     document.getElementById("status-max").textContent = t("max");
     document.getElementById("label-summary").textContent = t("summary");
+    document.getElementById("label-comparison-csv").textContent = t("comparisonCsv");
+    document.getElementById("comparison-title").textContent = t("comparisonTitle");
+    if (!comparisonState.datasets.length) comparisonHint.textContent = t("comparisonHint");
     document.getElementById("label-metric").textContent = t("metric");
     document.getElementById("label-metric-channel").textContent = t("metricChannel");
     document.getElementById("title-metric-map").textContent = t("metricMap");
@@ -1583,6 +1826,7 @@
     drawHeatmap();
     drawTrace();
     drawProfile();
+    renderComparisonSurfaces();
   }
 
   function updateMetrics() {
@@ -1640,6 +1884,11 @@
     reader.readAsText(file);
   });
 
+  comparisonInput.addEventListener("change", () => {
+    if (!comparisonInput.files?.length) return;
+    loadComparisonFiles(comparisonInput.files);
+  });
+
   summaryInput.addEventListener("change", () => {
     const file = summaryInput.files && summaryInput.files[0];
     if (!file) return;
@@ -1671,6 +1920,7 @@
 
   languageSelect.addEventListener("change", () => {
     applyLanguage();
+    renderComparisonPanels();
     update();
     updateMetrics();
   });
@@ -1693,6 +1943,8 @@
   transformInput.addEventListener("change", () => {
     state.frame = 0;
     applyTransform();
+    applyComparisonTransforms();
+    renderComparisonPanels();
     update();
   });
 
@@ -1739,6 +1991,8 @@
       updateMetrics();
     }).observe(canvas);
   });
+
+  window.addEventListener("resize", renderComparisonSurfaces);
 
   function tick() {
     if (!state.playing) return;
